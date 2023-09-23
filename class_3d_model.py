@@ -74,7 +74,7 @@ class a_3d_model:
         self.plane_equ_para=np.array(self.plane_equ_para)
         # self.plane_equ_para row:面的数量, column:4 (a, b, c, d)
         self.plane_equ_para=self.plane_equ_para.reshape(self.plane_equ_para.shape[0], self.plane_equ_para.shape[2])
-    
+    # 计算出所有点的Q矩阵==>不怎么明白这样计算的目的，需要再进行仔细查看
     def calculate_Q_matrices(self):
         self.Q_matrices = []
         for i in range(0, self.number_of_points):
@@ -85,7 +85,7 @@ class a_3d_model:
             face_set_index=np.where(self.faces==point_index)[0]
             Q_temp=np.zeros((4,4))
             for j in face_set_index:
-                # 取出第j个平面
+                # 取出第j个平面(第j行)
                 p=self.plane_equ_para[j,:]
                 p=p.reshape(1, len(p))
                 # np.matmul(p.T, p) == Kp

@@ -10,11 +10,13 @@ from class_3d_model import a_3d_model
 
 # Mesh simplification calss
 class mesh_simplify(a_3d_model):
+    # self（指向类实例本身的引用）
     def __init__(self, input_filepath, threshold, simplify_ratio):
         if simplify_ratio>1 or simplify_ratio<=0:
             sys.exit('Error: simplification ratio should be (0<r<=1).')
         if threshold<0:
             sys.exit('Error: threshold should be (>=0).')
+        # 调用了父类"a_3d_model"的构造函数，继承其初始化的类属性
         super().__init__(input_filepath)
         print('Import model: '+str(input_filepath))
         self.t=threshold
@@ -25,21 +27,27 @@ class mesh_simplify(a_3d_model):
         self.dist_pairs = []
         for i in range(0, self.number_of_points):
             current_point_location=i+1
+            # 取出第i行坐标
             current_point=self.points[i,:]
+            # 当前点到每个点的距离==>行轴求和(列相加)==>欧氏距离
             current_point_to_others_dist=(np.sum((self.points-current_point)**2,axis=1))**0.5
+            # np.where返回的是一个元组,[0]包含满足的数组，包含找到的顶点索引==> 元组内数组均+1到valid_pairs_location中
             valid_pairs_location=np.where(current_point_to_others_dist<=self.t)[0]+1
             valid_pairs_location=valid_pairs_location.reshape(len(valid_pairs_location),1)
+            # 列拼接 (len(valid_pairs_location),2)
             current_valid_pairs=np.concatenate([current_point_location*np.ones((valid_pairs_location.shape[0],1)),valid_pairs_location],axis=1)
             if i==0:
                 self.dist_pairs=current_valid_pairs
             else:
                 self.dist_pairs=np.concatenate([self.dist_pairs, current_valid_pairs], axis=0)
         self.dist_pairs=np.array(self.dist_pairs)
+        # 删除自身
         find_same=self.dist_pairs[:,1]-self.dist_pairs[:,0]
         find_same_loc=np.where(find_same==0)[0]
         self.dist_pairs=np.delete(self.dist_pairs, find_same_loc, axis=0)
         
         if self.dist_pairs.size > 0:
+            # 边与有效点对进行拼接
             self.valid_pairs=np.concatenate([self.edges,self.dist_pairs],axis=0)
             self.valid_pairs=np.array(self.valid_pairs, dtype=int)
         else:
@@ -48,7 +56,8 @@ class mesh_simplify(a_3d_model):
         find_same=self.valid_pairs[:,1]-self.valid_pairs[:,0]
         find_same_loc=np.where(find_same==0)[0]
         self.valid_pairs=np.delete(self.valid_pairs, find_same_loc, axis=0)
-        
+        # unique_valid_pairs_trans 将包含 self.valid_pairs 数组中的唯一对坐标的唯一标识符，并按照它们在 self.valid_pairs 中第一次出现的顺序进行排序。
+        # unique_valid_pairs_loc 将包含唯一对坐标在 self.valid_pairs 中第一次出现的索引位置。
         unique_valid_pairs_trans, unique_valid_pairs_loc=np.unique(self.valid_pairs[:,0]*(10**10)+self.valid_pairs[:,1], return_index=True)
         self.valid_pairs=self.valid_pairs[unique_valid_pairs_loc,:]
     
@@ -56,30 +65,40 @@ class mesh_simplify(a_3d_model):
     # The error v_opt.T*(Q1+Q2)*v_pot of this target vertex becomes the cost of contracting that pair.
     # Place all the pairs in a heap keyed on cost with the minimum cost pair at the top
     def calculate_optimal_contraction_pairs_and_cost(self):
+        # 最优收缩目的
         self.v_optimal = []
+        # 收缩成本
         self.cost = []
         number_of_valid_pairs=self.valid_pairs.shape[0]
         for i in range(0, number_of_valid_pairs):
             current_valid_pair=self.valid_pairs[i,:]
             v_1_location=current_valid_pair[0]-1
             v_2_location=current_valid_pair[1]-1
-            # find Q_1
+            # find Q_1 (4,4)
             Q_1=self.Q_matrices[v_1_location]
             # find Q_2
             Q_2=self.Q_matrices[v_2_location]
             Q=Q_1+Q_2
+            # 将 Q 转换为一个齐次坐标矩阵，以便能够计算最优收缩目标
             Q_new=np.concatenate([Q[:3,:], np.array([0,0,0,1]).reshape(1,4)], axis=0)
+            # 在计算最优收缩目标时，需要使用 Q_new 的逆矩阵，因此需要确保 Q_new 的行列式大于零（非奇异矩阵）
             if np.linalg.det(Q_new)>0:
                 current_v_opt=np.matmul(np.linalg.inv(Q_new),np.array([0,0,0,1]).reshape(4,1))
+                # 不理解:cost = current_v_opt.T * Q *current_v_opt
                 current_cost=np.matmul(np.matmul(current_v_opt.T, Q), current_v_opt)
+                # 第4位是缩放因子
                 current_v_opt=current_v_opt.reshape(4)[:3]
             else:
+                # 构建齐次坐标
                 v_1=np.append(self.points[v_1_location,:],1).reshape(4,1)
                 v_2=np.append(self.points[v_2_location,:],1).reshape(4,1)
+                # 取中点
                 v_mid=(v_1+v_2)/2
+                # 分别计算成本v1,v2,v_mid
                 delta_v_1=np.matmul(np.matmul(v_1.T, Q), v_1)
                 delta_v_2=np.matmul(np.matmul(v_2.T, Q), v_2)
                 delta_v_mid=np.matmul(np.matmul(v_mid.T, Q), v_mid)
+                # 获取最小的成本及位置
                 current_cost=np.min(np.array([delta_v_1, delta_v_2, delta_v_mid]))
                 min_delta_loc=np.argmin(np.array([delta_v_1, delta_v_2, delta_v_mid]))
                 current_v_opt=np.concatenate([v_1,v_2,v_mid],axis=1)[:,min_delta_loc].reshape(4)
@@ -90,7 +109,7 @@ class mesh_simplify(a_3d_model):
         self.v_optimal=np.array(self.v_optimal)
         self.cost=np.array(self.cost)
         self.cost=self.cost.reshape(self.cost.shape[0])
-        
+        # 从小到大进行排序
         cost_argsort=np.argsort(self.cost)
         self.valid_pairs=self.valid_pairs[cost_argsort,:]
         self.v_optimal=self.v_optimal[cost_argsort,:]
@@ -100,12 +119,13 @@ class mesh_simplify(a_3d_model):
         self.new_valid_pair=self.valid_pairs[0,:]
     
     # Iteratively remove the pair (v1, v2) of least cost from the heap
-    # contract this pair, and update the costs of all valid pairs involving (v1, v2).
+    # ** contract this pair, and update the costs of all valid pairs involving (v1, v2) **.
     # until existing points = ratio * original points
     def iteratively_remove_least_cost_valid_pairs(self):
         self.new_point_count=0
         self.status_points=np.zeros(self.number_of_points)
         self.status_faces=np.zeros(self.number_of_faces)
+        # new_point_count是点对的长度==> self.number_of_points>=self.new_point_count
         while (self.number_of_points-self.new_point_count)>=self.ratio*(self.number_of_points):
             
             # current valid pair
