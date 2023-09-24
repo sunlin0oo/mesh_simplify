@@ -74,7 +74,7 @@ class a_3d_model:
         self.plane_equ_para=np.array(self.plane_equ_para)
         # self.plane_equ_para row:面的数量, column:4 (a, b, c, d)
         self.plane_equ_para=self.plane_equ_para.reshape(self.plane_equ_para.shape[0], self.plane_equ_para.shape[2])
-    # 计算出所有点的Q矩阵==>不怎么明白这样计算的目的，需要再进行仔细查看
+    # 计算出所有点的Q矩阵==>所有涉及此顶点面的P^T*P总和==>不怎么明白这样计算的目的，需要再进行仔细查看
     def calculate_Q_matrices(self):
         self.Q_matrices = []
         for i in range(0, self.number_of_points):
