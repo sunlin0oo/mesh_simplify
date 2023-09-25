@@ -72,9 +72,10 @@ class a_3d_model:
             # 归一化操作可以确保平面参数满足平方和为1的条件
             self.plane_equ_para.append(np.concatenate([abc.T, np.array(-1).reshape(1, 1)], axis=1)/(np.sum(abc**2)**0.5))
         self.plane_equ_para=np.array(self.plane_equ_para)
-        # self.plane_equ_para row:面的数量, column:4 (a, b, c, d)
+        # self.plane_equ_para row:面的数量, column:4 (a, b, c, d)  self.plane_equ_para.shape[2]这里是否应该改成self.plane_equ_para.shape[1]
         self.plane_equ_para=self.plane_equ_para.reshape(self.plane_equ_para.shape[0], self.plane_equ_para.shape[2])
-    # 计算出所有点的Q矩阵==>所有涉及此顶点面的P^T*P总和==>不怎么明白这样计算的目的，需要再进行仔细查看
+    # 计算出所有点的Q矩阵==>将所有与该点相关的面的 Kp 矩阵进行叠加
+    # 是为了能够在后面进行计算损失和成本
     def calculate_Q_matrices(self):
         self.Q_matrices = []
         for i in range(0, self.number_of_points):

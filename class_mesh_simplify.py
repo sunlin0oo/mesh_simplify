@@ -28,6 +28,7 @@ class mesh_simplify(a_3d_model):
     def generate_valid_pairs(self):
         self.dist_pairs = []
         for i in range(0, self.number_of_points):
+            # 从1开始记录当前顶点位置
             current_point_location = i+1
             # 取出第i行坐标
             current_point = self.points[i, :]
@@ -40,6 +41,7 @@ class mesh_simplify(a_3d_model):
             valid_pairs_location = valid_pairs_location.reshape(
                 len(valid_pairs_location), 1)
             # 列拼接 (len(valid_pairs_location),2)
+            # 第一列是当前点的位置，第二列是与当前点距离在阈值范围内的点的位置。
             current_valid_pairs = np.concatenate([current_point_location*np.ones(
                 (valid_pairs_location.shape[0], 1)), valid_pairs_location], axis=1)
             if i == 0:
@@ -78,27 +80,32 @@ class mesh_simplify(a_3d_model):
         self.v_optimal = []
         # 收缩成本
         self.cost = []
+        # 点对的数量
         number_of_valid_pairs = self.valid_pairs.shape[0]
         for i in range(0, number_of_valid_pairs):
+            # 取出点对 i
             current_valid_pair = self.valid_pairs[i, :]
+            # 在计算时 顶点的位置索引是从1开始的
             v_1_location = current_valid_pair[0]-1
             v_2_location = current_valid_pair[1]-1
-            # find Q_1 (4,4)
+            # find Q_1 (4,4) startVertex
             Q_1 = self.Q_matrices[v_1_location]
-            # find Q_2
+            # find Q_2 endVertex
             Q_2 = self.Q_matrices[v_2_location]
+            # 最佳收缩点对应的Q_opt
             Q = Q_1+Q_2
-            # 将 Q 转换为一个齐次坐标矩阵，以便能够计算最优收缩目标
+            # 将 Q 转换为一个齐次坐标矩阵，以便能够计算最优收缩目标 Q前三行和[0,0,0,1]按行向量拼接
             Q_new = np.concatenate(
                 [Q[:3, :], np.array([0, 0, 0, 1]).reshape(1, 4)], axis=0)
             # 在计算最优收缩目标时，需要使用 Q_new 的逆矩阵，因此需要确保 Q_new 的行列式大于零（非奇异矩阵）
             if np.linalg.det(Q_new) > 0:
+                # 最优收缩顶点v_opt
                 current_v_opt = np.matmul(np.linalg.inv(
                     Q_new), np.array([0, 0, 0, 1]).reshape(4, 1))
-                # 不理解:cost = current_v_opt.T * Q *current_v_opt
+                # 最小收缩误差---cost = current_v_opt.T * Q_opt *current_v_opt
                 current_cost = np.matmul(
                     np.matmul(current_v_opt.T, Q), current_v_opt)
-                # 第4位是缩放因子
+                # 重塑长度为4的一维数组；取前3位的一维数组(x,y,z)；第4位是缩放因子
                 current_v_opt = current_v_opt.reshape(4)[:3]
             else:
                 # 构建齐次坐标
@@ -124,7 +131,7 @@ class mesh_simplify(a_3d_model):
         self.v_optimal = np.array(self.v_optimal)
         self.cost = np.array(self.cost)
         self.cost = self.cost.reshape(self.cost.shape[0])
-        # 从小到大进行排序
+        # 从小到大进行排序  构建小根堆
         cost_argsort = np.argsort(self.cost)
         self.valid_pairs = self.valid_pairs[cost_argsort, :]
         self.v_optimal = self.v_optimal[cost_argsort, :]
@@ -145,11 +152,11 @@ class mesh_simplify(a_3d_model):
 
             # current valid pair
             current_valid_pair = self.new_valid_pair
-            # point location in self.points
+            # point location in self.points  init：point_positon + 1
             v_1_location = current_valid_pair[0]-1
             v_2_location = current_valid_pair[1]-1
 
-            # update self.points
+            # update self.points  将v1 v2替换成最优收缩坐标
             # put the top optimal vertex(point) into the sequence of points
             self.points[v_1_location, :] = self.new_point.reshape(1, 3)
             self.points[v_2_location, :] = self.new_point.reshape(1, 3)
@@ -170,13 +177,13 @@ class mesh_simplify(a_3d_model):
                 if np.where(v_1_in_faces_loc[0] == item)[0].size > 0:
                     v_1_2_in_one_face_loc.append(item)
             v_1_2_in_one_face_loc = np.array(v_1_2_in_one_face_loc)
-            # 给共面标记上 -1 
+            # 给共面标记上 -1
             if v_1_2_in_one_face_loc.size >= 1:
                 self.status_faces[v_1_2_in_one_face_loc] = -1
 
             # update self.faces
             # points of faces involving v1 and v2 are changed accordingly
-            # set v2 to v1 ==> 将v2替换成v1
+            # set v2 to v1 ==> 包含点 v_2_location 的面的索引位置替换为 v_1_location+1
             self.faces[v_2_in_faces_loc] = v_1_location+1
 
             # update edges
@@ -186,7 +193,8 @@ class mesh_simplify(a_3d_model):
             #self.edges=np.concatenate([edge_1, edge_2, edge_3], axis=0)
 
             # update self.plane_equ_para==> 合并去除重复元素
-            v_1_2_in_faces_loc = np.unique(np.append(v_1_in_faces_loc[0], v_2_in_faces_loc[0]))
+            v_1_2_in_faces_loc = np.unique(
+                np.append(v_1_in_faces_loc[0], v_2_in_faces_loc[0]))
             self.update_plane_equation_parameters(v_1_2_in_faces_loc)
 
             # update self.Q_matrices
@@ -267,7 +275,7 @@ class mesh_simplify(a_3d_model):
             self.valid_pairs == self.new_valid_pair[0])
         v_2_loc_in_valid_pairs = np.where(
             self.valid_pairs == self.new_valid_pair[1])
-        # update: self.valid_pairs
+        # update: self.valid_pairs 将v1 v2顶点更新成最新索引位置
         self.valid_pairs[v_1_loc_in_valid_pairs] = target_loc+1
         self.valid_pairs[v_2_loc_in_valid_pairs] = target_loc+1
         # 存储需要删除的位置
@@ -296,8 +304,10 @@ class mesh_simplify(a_3d_model):
 
     def update_optimal_contraction_pairs_and_cost(self, target_loc):
         # input: target_loc, a number, location of self.points need updating
+        # 这里还稍微有点不理解
         v_target_loc_in_valid_pairs = np.where(
             self.valid_pairs == target_loc+1)[0]
+        # 收缩点后，重新计算最优的收缩点及最小成本
         for i in v_target_loc_in_valid_pairs:
             current_valid_pair = self.valid_pairs[i, :]
             v_1_location = current_valid_pair[0]-1
@@ -344,17 +354,20 @@ class mesh_simplify(a_3d_model):
     def generate_new_3d_model(self):
         point_serial_number = np.arange(self.points.shape[0])+1
         points_to_delete_locs = np.where(self.status_points == -1)[0]
+        # 删除点
         self.points = np.delete(self.points, points_to_delete_locs, axis=0)
-        point_serial_number = np.delete(
-            point_serial_number, points_to_delete_locs)
+        # 从 point_serial_number 中删除相应的序号
+        point_serial_number = np.delete(point_serial_number, points_to_delete_locs)
+        # 用于存储删除点后每个点的新序号
         point_serial_number_after_del = np.arange(self.points.shape[0])+1
 
         faces_to_delete_locs = np.where(self.status_faces == -1)[0]
         self.faces = np.delete(self.faces, faces_to_delete_locs, axis=0)
-
+        # 对于每个序号，它找到在 self.faces 数组中与该序号对应的点的位置，并将这些位置更新为新的序号值。
+        # 从1开始遍历，
         for i in point_serial_number_after_del:
-            point_loc_in_face = np.where(
-                self.faces == point_serial_number[i-1])
+            # 寻找顶点已经被删除的面索引，将其更新为最新的i
+            point_loc_in_face = np.where(self.faces == point_serial_number[i-1])
             self.faces[point_loc_in_face] = i
 
         self.number_of_points = self.points.shape[0]
